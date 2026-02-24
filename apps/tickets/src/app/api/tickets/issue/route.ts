@@ -3,6 +3,8 @@ import { Client } from "pg";
 import { Resend } from "resend";
 import QRCode from "qrcode";
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const { ticketTypeId, email, name } = await req.json().catch(() => ({}));
 

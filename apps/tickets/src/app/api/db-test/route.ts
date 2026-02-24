@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { Client } from "pg";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const connectionString = process.env.DATABASE_URL;
 

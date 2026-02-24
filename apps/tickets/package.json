@@ -13,7 +13,8 @@
     "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "resend": "^6.9.2"
+    "resend": "^6.9.2",
+    "pg": "^8.16.0"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -23,6 +24,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@types/pg": "^8.15.4"
   }
 }

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Client } from "pg";
 import crypto from "crypto";
 
+export const runtime = "nodejs";
+
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin");
   const allow = process.env.CORS_ALLOW_ORIGIN;

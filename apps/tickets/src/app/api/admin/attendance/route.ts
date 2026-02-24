@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { Client } from "pg";
 
+export const runtime = "nodejs";
+
 function toCsv(rows: Array<Record<string, unknown>>) {
   const headers = ["used_at", "ticket_id", "name", "email", "ticket_type", "event_name", "scanned_by"]; 
   const escape = (v: unknown) => {
