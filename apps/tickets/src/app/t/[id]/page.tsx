@@ -39,7 +39,7 @@ async function getTicket(id: string): Promise<TicketApiResponse> {
 }
 
 export default async function TicketPage({ params }: { params: { id: string } }) {
-  const id = params.id;
+  const id = params.id.trim();
   const data = await getTicket(id);
 
   if (!data.ok) {
