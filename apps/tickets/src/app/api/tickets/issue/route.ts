@@ -6,6 +6,16 @@ import QRCode from "qrcode";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const requiredKey = process.env.ISSUE_API_KEY;
+  if (requiredKey) {
+    const auth = req.headers.get("authorization") ?? "";
+    const m = auth.match(/^Bearer\s+(.+)$/i);
+    const token = m?.[1]?.trim() || "";
+    if (!token || token !== requiredKey) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   const { ticketTypeId, email, name } = await req.json().catch(() => ({}));
 
   if (!ticketTypeId || !email) {
@@ -20,6 +30,30 @@ export async function POST(req: Request) {
   try {
     await client.connect();
 
+    const ttRes = await client.query(
+      `
+      select
+        tt.id,
+        tt.name as ticket_type,
+        tt.price_isk,
+        e.name as event_name
+      from ticket_types tt
+      join events e on e.id = tt.event_id
+      where tt.id = $1
+      limit 1
+      `,
+      [ticketTypeId]
+    );
+
+    if (ttRes.rowCount === 0) {
+      return NextResponse.json({ ok: false, error: "Invalid ticketTypeId" }, { status: 400 });
+    }
+
+    const ticketType = ttRes.rows[0].ticket_type as string;
+    const priceIsk = ttRes.rows[0].price_isk as number;
+    const eventName = ttRes.rows[0].event_name as string;
+    const subjectEventName = /\bFV\b/i.test(eventName) ? eventName : `${eventName} FV`;
+
     const res = await client.query(
       `insert into tickets (ticket_type_id, email, name)
        values ($1, $2, $3)
@@ -31,8 +65,6 @@ export async function POST(req: Request) {
     const origin = new URL(req.url).origin;
     const publicBase = process.env.TICKETS_PUBLIC_BASE_URL ?? origin;
     const ticketUrl = `${publicBase}/t/${ticketId}`;
-
-    const qrUrl = `${publicBase}/api/tickets/qr?id=${ticketId}`;
 
     // QR should match what the door-scanner expects (ticket UUID).
     // Note: many email clients block/strip `data:` image URLs. We host the QR and also attach it.
@@ -51,17 +83,31 @@ export async function POST(req: Request) {
     } else {
       try {
         const resend = new Resend(apiKey);
+        const from = process.env.RESEND_FROM ?? "Tickets <onboarding@resend.dev>";
+
+        const safeName = (name ?? "").toString().trim();
+        const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
+
         const sent = await resend.emails.send({
-          from: "Tickets <onboarding@resend.dev>",
+          from,
           to: email,
-          subject: "Your ticket 🎟️",
+          subject: `Þinn miði á ${subjectEventName}`,
           html: `
-            <h1>Your ticket</h1>
-            <p>Hi ${name ?? ""}</p>
-            <p>Show this QR at the door (you may need to “Display images” in your email client):</p>
-            <p><img src="${qrUrl}" alt="QR code" width="280" height="280" /></p>
-            <p>Or open the link:</p>
-            <p><a href="${ticketUrl}">${ticketUrl}</a></p>
+            <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
+              <h1 style="margin: 0 0 8px">Þinn miði á ${subjectEventName}</h1>
+              <p style="margin: 0 0 12px">${greeting}.</p>
+
+              <p style="margin: 0 0 12px">Miði: <b>${ticketType}</b></p>
+
+              <p style="margin: 0 0 8px">QR kóðinn er í viðhengi. Sýndu hann við inngang.</p>
+              <p style="margin: 0 0 12px; font-size: 14px; color: #444">
+                Viðhengi: <b>ticket-${ticketId}.png</b>
+              </p>
+
+              <p style="margin: 12px 0 0">Tengill á miðann: <a href="${ticketUrl}">${ticketUrl}</a></p>
+
+              <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
+            </div>
           `,
           attachments: [
             {

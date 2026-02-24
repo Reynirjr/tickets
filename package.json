@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "dev:tickets": "npm --workspace apps/tickets run dev",
-    "dev:scan": "npm --workspace apps/scan run dev"
+    "dev:scan": "npm --workspace apps/scan run dev",
+    "bulk:issue": "node scripts/bulk-issue.mjs"
   },
   "devDependencies": {
     "@types/pg": "^8.16.0",
