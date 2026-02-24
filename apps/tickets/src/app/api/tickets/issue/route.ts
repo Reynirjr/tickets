@@ -118,8 +118,18 @@ export async function POST(req: Request) {
           ],
         });
 
-        // Resend returns an object that includes an id on success.
-        emailResult = { ok: true, id: (sent as unknown as { id?: string })?.id };
+        // resend@6 returns { data, error } and does not necessarily throw on API errors.
+        const maybeError = (sent as unknown as { error?: { message?: string } | string | null })?.error;
+        if (maybeError) {
+          const message =
+            typeof maybeError === "string" ? maybeError : maybeError?.message ? maybeError.message : String(maybeError);
+          emailResult = { ok: false, error: message };
+        } else {
+          const id =
+            (sent as unknown as { data?: { id?: string } | null })?.data?.id ??
+            (sent as unknown as { id?: string })?.id;
+          emailResult = { ok: true, id };
+        }
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
         emailResult = { ok: false, error: message };
