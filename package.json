@@ -1,0 +1,20 @@
+{
+  "name": "tickets",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:tickets": "npm --workspace apps/tickets run dev",
+    "dev:scan": "npm --workspace apps/scan run dev"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.16.0",
+    "netlify-cli": "^23.15.1"
+  },
+  "dependencies": {
+    "pg": "^8.18.0"
+  }
+}

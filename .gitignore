@@ -1,0 +1,23 @@
+node_modules/
+**/node_modules/
+
+dist/
+build/
+
+# Next.js
+**/.next/
+**/out/
+
+# Local env files
+.env*
+
+# Netlify local artifacts
+.netlify/
+**/.netlify/
+
+# GitHub Copilot / agent artifacts (local tooling)
+.agents/
+**/.agents/
+
+# Netlify CLI may generate this; commit only if you intentionally use it
+deno.lock
