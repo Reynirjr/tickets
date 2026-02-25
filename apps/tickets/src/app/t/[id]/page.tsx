@@ -1,6 +1,9 @@
 import Image from "next/image";
 import QRCode from "qrcode";
 import { headers } from "next/headers";
+import { Client } from "pg";
+
+export const runtime = "nodejs";
 
 type Ticket = {
   event_name: string;
@@ -48,11 +51,50 @@ async function baseUrl() {
 }
 
 async function getTicket(id: string): Promise<TicketApiResponse> {
-  const origin = await baseUrl();
-  const res = await fetch(`${origin}/api/tickets/get?id=${id}`, {
-    cache: "no-store",
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
   });
-  return res.json();
+
+  try {
+    await client.connect();
+    const res = await client.query(
+      `
+      select
+        t.id,
+        t.email,
+        t.name,
+        t.used,
+        t.used_at,
+        t.issued_at,
+        tt.name as ticket_type,
+        tt.price_isk,
+        e.name as event_name,
+        e.starts_at,
+        e.ends_at,
+        e.venue
+      from tickets t
+      join ticket_types tt on tt.id = t.ticket_type_id
+      join events e on e.id = tt.event_id
+      where t.id = $1
+      limit 1
+      `,
+      [id]
+    );
+
+    if (res.rowCount === 0) {
+      return { ok: false, error: "NOT_FOUND" };
+    }
+
+    return { ok: true, ticket: res.rows[0] };
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: message };
+  } finally {
+    try {
+      await client.end();
+    } catch {}
+  }
 }
 
 export default async function TicketPage({ params }: { params: { id: string } }) {
