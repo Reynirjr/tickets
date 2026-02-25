@@ -44,7 +44,9 @@ function formatStartsAt(value?: string | null): string {
   const minute = get("minute");
 
   if (!day || !month || !year || !hour || !minute) return "—";
-  return `${hour}:${minute} ${day}/${month}/${year}`;
+  const d1 = String(Number(day));
+  const m1 = String(Number(month));
+  return `${hour}:${minute} ${d1}/${m1}/${year}`;
 }
 
 function extractUuid(raw: string): string | null {
