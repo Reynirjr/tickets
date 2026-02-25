@@ -5,6 +5,39 @@ import QRCode from "qrcode";
 
 export const runtime = "nodejs";
 
+function formatEventStartForSubject(value?: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("is-IS", {
+    timeZone: "Atlantic/Reykjavik",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  const day = get("day");
+  const monthRaw = get("month");
+  const hour = get("hour");
+  const minute = get("minute");
+
+  if (!day || !monthRaw || !hour || !minute) return "";
+
+  // is-IS short months often include trailing '.' (e.g. 'feb.'). Normalize to 'feb'.
+  const month = monthRaw
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/g, "");
+
+  if (!month) return "";
+  return `${hour}:${minute}, ${day}.${month}`;
+}
+
 export async function POST(req: Request) {
   const requiredKey = process.env.ISSUE_API_KEY;
   if (requiredKey) {
@@ -36,7 +69,8 @@ export async function POST(req: Request) {
         tt.id,
         tt.name as ticket_type,
         tt.price_isk,
-        e.name as event_name
+        e.name as event_name,
+        e.starts_at
       from ticket_types tt
       join events e on e.id = tt.event_id
       where tt.id = $1
@@ -50,9 +84,11 @@ export async function POST(req: Request) {
     }
 
     const ticketType = ttRes.rows[0].ticket_type as string;
-    const priceIsk = ttRes.rows[0].price_isk as number;
     const eventName = ttRes.rows[0].event_name as string;
+    const startsAt = (ttRes.rows[0].starts_at as string | null | undefined) ?? null;
     const subjectEventName = /\bFV\b/i.test(eventName) ? eventName : `${eventName} FV`;
+    const subjectStart = formatEventStartForSubject(startsAt);
+    const subjectLine = `Þinn miði á ${subjectEventName}${subjectStart ? ` ${subjectStart}` : ""}`;
 
     const res = await client.query(
       `insert into tickets (ticket_type_id, email, name)
@@ -91,21 +127,15 @@ export async function POST(req: Request) {
         const sent = await resend.emails.send({
           from,
           to: email,
-          subject: `Þinn miði á ${subjectEventName}`,
+          subject: subjectLine,
           html: `
             <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
-              <h1 style="margin: 0 0 8px">Þinn miði á ${subjectEventName}</h1>
+              <h1 style="margin: 0 0 8px">${subjectLine}</h1>
               <p style="margin: 0 0 12px">${greeting}.</p>
 
               <p style="margin: 0 0 12px">Miði: <b>${ticketType}</b></p>
 
               <p style="margin: 0 0 8px">QR kóðinn er í viðhengi. Sýndu hann við inngang.</p>
-              <p style="margin: 0 0 12px; font-size: 14px; color: #444">
-                Viðhengi: <b>ticket-${ticketId}.png</b>
-              </p>
-
-              <p style="margin: 12px 0 0">Tengill á miðann: <a href="${ticketUrl}">${ticketUrl}</a></p>
-
               <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
             </div>
           `,
