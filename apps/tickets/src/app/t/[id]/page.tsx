@@ -97,8 +97,13 @@ async function getTicket(id: string): Promise<TicketApiResponse> {
   }
 }
 
-export default async function TicketPage({ params }: { params: { id: string } }) {
-  const raw = params.id;
+export default async function TicketPage({
+  params,
+}: {
+  params: { id?: string } | Promise<{ id?: string }>;
+}) {
+  const resolvedParams = await Promise.resolve(params);
+  const raw = typeof resolvedParams?.id === "string" ? resolvedParams.id : "";
   const id = extractUuid(raw);
 
   if (!id) {
