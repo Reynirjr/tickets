@@ -169,6 +169,7 @@ export async function POST(req: Request) {
       | { ok: true; id?: string }
       | { ok: false; error: string; skipped?: boolean }
       | undefined;
+    let emailMeta: { from?: string; replyTo?: string | null } | undefined;
 
     if (!apiKey) {
       emailResult = { ok: false, error: "RESEND_API_KEY missing", skipped: true };
@@ -177,6 +178,7 @@ export async function POST(req: Request) {
         const resend = new Resend(apiKey);
         const from = process.env.RESEND_FROM ?? "Tickets <onboarding@resend.dev>";
         const replyTo = (process.env.RESEND_REPLY_TO ?? "").toString().trim();
+        emailMeta = { from, replyTo: replyTo || null };
 
         const safeName = (name ?? "").toString().trim();
         const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
@@ -230,6 +232,7 @@ export async function POST(req: Request) {
       ticketUrl,
       issuedAt: res.rows[0].issued_at,
       subject: subjectLine,
+      emailMeta,
       email: emailResult,
     });
   } catch (e: unknown) {
