@@ -5,27 +5,30 @@ import QRCode from "qrcode";
 
 export const runtime = "nodejs";
 
-function formatEventStartForSubject(value?: string | null): string {
-  if (!value) return "";
+function normalizeTicketTypeKey(value?: string | null): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function formatEventDateParts(value?: string | null): { day: string; month: string } | null {
+  if (!value) return null;
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
+  if (Number.isNaN(d.getTime())) return null;
 
   const parts = new Intl.DateTimeFormat("is-IS", {
     timeZone: "Atlantic/Reykjavik",
     day: "numeric",
     month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
   }).formatToParts(d);
 
   const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
   const day = get("day");
   const monthRaw = get("month");
-  const hour = get("hour");
-  const minute = get("minute");
-
-  if (!day || !monthRaw || !hour || !minute) return "";
+  if (!day || !monthRaw) return null;
 
   // is-IS short months often include trailing '.' (e.g. 'feb.'). Normalize to 'feb'.
   const month = monthRaw
@@ -34,8 +37,46 @@ function formatEventStartForSubject(value?: string | null): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z]/g, "");
 
-  if (!month) return "";
-  return `${hour}:${minute}, ${day}.${month}`;
+  if (!month) return null;
+  return { day: String(Number(day)), month };
+}
+
+function formatTimeFromStartsAt(value?: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("is-IS", {
+    timeZone: "Atlantic/Reykjavik",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  const hour = get("hour");
+  const minute = get("minute");
+  if (!hour || !minute) return "";
+  return `${hour}:${minute}`;
+}
+
+function formatSubjectStart(ticketType: string, startsAt: string | null): string {
+  const date = formatEventDateParts(startsAt);
+  if (!date) return "";
+
+  const key = normalizeTicketTypeKey(ticketType);
+  let time = "";
+
+  if (key === "matur + ball" || key === "mat og ball" || key === "matur og ball") {
+    time = "18:30";
+  } else if (key === "bara ball" || key === "ball") {
+    time = "21:00";
+  } else {
+    time = formatTimeFromStartsAt(startsAt);
+  }
+
+  if (!time) return "";
+  return `${date.day}. ${date.month} kl:${time}`;
 }
 
 export async function POST(req: Request) {
@@ -87,7 +128,7 @@ export async function POST(req: Request) {
     const eventName = ttRes.rows[0].event_name as string;
     const startsAt = (ttRes.rows[0].starts_at as string | null | undefined) ?? null;
     const subjectEventName = /\bFV\b/i.test(eventName) ? eventName : `${eventName} FV`;
-    const subjectStart = formatEventStartForSubject(startsAt);
+    const subjectStart = formatSubjectStart(ticketType, startsAt);
     const subjectLine = `Þinn miði á ${subjectEventName}${subjectStart ? ` ${subjectStart}` : ""}`;
 
     const res = await client.query(
