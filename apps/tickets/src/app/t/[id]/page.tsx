@@ -29,6 +29,18 @@ function extractUuid(raw: string): string | null {
     // ignore
   }
 
+  // Normalize and clean up common character substitutions from copy/paste or rich text.
+  // - NFKC fixes some “look-alike” characters
+  // - Some clients replace '-' with other dash/minus characters
+  // - Trim/strip whitespace
+  try {
+    s = s.normalize("NFKC");
+  } catch {
+    // ignore
+  }
+  s = s.replace(/[\s\u00A0]+/g, "");
+  s = s.replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, "-");
+
   // Remove common invisible characters that email clients sometimes inject.
   s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
 

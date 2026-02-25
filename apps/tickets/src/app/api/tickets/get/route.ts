@@ -12,7 +12,18 @@ export async function GET(req: Request) {
   } catch {
     // ignore
   }
-  cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+
+  try {
+    cleaned = cleaned.normalize("NFKC");
+  } catch {
+    // ignore
+  }
+
+  cleaned = cleaned
+    .replace(/[\s\u00A0]+/g, "")
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, "-")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim();
 
   const m = cleaned.match(
     /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i
