@@ -18,6 +18,23 @@ type TicketApiResponse =
   | { ok: true; ticket: Ticket }
   | { ok: false; error: string };
 
+function extractUuid(raw: string): string | null {
+  let s = String(raw ?? "");
+  try {
+    s = decodeURIComponent(s);
+  } catch {
+    // ignore
+  }
+
+  // Remove common invisible characters that email clients sometimes inject.
+  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
+
+  const m = s.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i
+  );
+  return m ? m[0].toLowerCase() : null;
+}
+
 async function baseUrl() {
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
@@ -40,14 +57,16 @@ async function getTicket(id: string): Promise<TicketApiResponse> {
 
 export default async function TicketPage({ params }: { params: { id: string } }) {
   const raw = params.id;
-  let id = raw;
-  try {
-    id = decodeURIComponent(raw);
-  } catch {
-    // If the URL is malformed, fall back to the raw value.
-    id = raw;
+  const id = extractUuid(raw);
+
+  if (!id) {
+    return (
+      <main style={{ padding: 24, fontFamily: "system-ui" }}>
+        <h1>Ticket not found</h1>
+        <p>Invalid id (expected UUID)</p>
+      </main>
+    );
   }
-  id = id.trim();
   const data = await getTicket(id);
 
   if (!data.ok) {

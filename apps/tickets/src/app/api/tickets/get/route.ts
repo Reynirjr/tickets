@@ -5,7 +5,19 @@ export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const id = (url.searchParams.get("id") ?? "").trim();
+  const raw = url.searchParams.get("id") ?? "";
+  let cleaned = raw;
+  try {
+    cleaned = decodeURIComponent(cleaned);
+  } catch {
+    // ignore
+  }
+  cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+
+  const m = cleaned.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i
+  );
+  const id = m ? m[0] : "";
 
   if (!id) {
     return NextResponse.json({ ok: false, error: "Missing query param: id" }, { status: 400 });
