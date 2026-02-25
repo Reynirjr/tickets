@@ -176,6 +176,7 @@ export async function POST(req: Request) {
       try {
         const resend = new Resend(apiKey);
         const from = process.env.RESEND_FROM ?? "Tickets <onboarding@resend.dev>";
+        const replyTo = (process.env.RESEND_REPLY_TO ?? "").toString().trim();
 
         const safeName = (name ?? "").toString().trim();
         const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
@@ -183,6 +184,7 @@ export async function POST(req: Request) {
         const sent = await resend.emails.send({
           from,
           to: email,
+          ...(replyTo ? { replyTo } : {}),
           subject: subjectLine,
           html: `
             <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
