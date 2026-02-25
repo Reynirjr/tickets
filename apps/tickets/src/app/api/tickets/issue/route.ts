@@ -60,6 +60,20 @@ function formatTimeFromStartsAt(value?: string | null): string {
   return `${hour}:${minute}`;
 }
 
+function isFoodAndBallTicketType(normalizedKey: string): boolean {
+  // Covers: "Matur + ball", "Mat og ball", "Matur og ball", and variants with extra text.
+  const hasBall = /\bball\b/.test(normalizedKey);
+  const hasFood = /\bmatur\b/.test(normalizedKey) || /\bmat\b/.test(normalizedKey);
+  return hasBall && hasFood;
+}
+
+function isJustBallTicketType(normalizedKey: string): boolean {
+  // Covers: "Bara ball" and variants with extra text.
+  // Do NOT match generic "... ball ..." here (food+ball is handled separately).
+  if (normalizedKey === "ball") return true;
+  return /\bbara\b/.test(normalizedKey) && /\bball\b/.test(normalizedKey);
+}
+
 function formatSubjectStart(ticketType: string, startsAt: string | null): string {
   const date = formatEventDateParts(startsAt);
   if (!date) return "";
@@ -67,9 +81,10 @@ function formatSubjectStart(ticketType: string, startsAt: string | null): string
   const key = normalizeTicketTypeKey(ticketType);
   let time = "";
 
-  if (key === "matur + ball" || key === "mat og ball" || key === "matur og ball") {
+  // Precedence matters: "mat/matur" + "ball" must win over any "ball" matching.
+  if (isFoodAndBallTicketType(key)) {
     time = "18:30";
-  } else if (key === "bara ball" || key === "ball") {
+  } else if (isJustBallTicketType(key)) {
     time = "21:00";
   } else {
     time = formatTimeFromStartsAt(startsAt);
@@ -212,6 +227,7 @@ export async function POST(req: Request) {
       ticketId,
       ticketUrl,
       issuedAt: res.rows[0].issued_at,
+      subject: subjectLine,
       email: emailResult,
     });
   } catch (e: unknown) {
