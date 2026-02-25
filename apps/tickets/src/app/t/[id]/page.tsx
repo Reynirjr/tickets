@@ -39,7 +39,15 @@ async function getTicket(id: string): Promise<TicketApiResponse> {
 }
 
 export default async function TicketPage({ params }: { params: { id: string } }) {
-  const id = params.id.trim();
+  const raw = params.id;
+  let id = raw;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    // If the URL is malformed, fall back to the raw value.
+    id = raw;
+  }
+  id = id.trim();
   const data = await getTicket(id);
 
   if (!data.ok) {
