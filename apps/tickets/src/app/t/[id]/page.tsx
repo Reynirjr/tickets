@@ -21,6 +21,32 @@ type TicketApiResponse =
   | { ok: true; ticket: Ticket }
   | { ok: false; error: string };
 
+function formatStartsAt(value?: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Atlantic/Reykjavik",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const day = get("day");
+  const month = get("month");
+  const year = get("year");
+  const hour = get("hour");
+  const minute = get("minute");
+
+  if (!day || !month || !year || !hour || !minute) return "—";
+  return `${hour}:${minute} ${day}/${month}/${year}`;
+}
+
 function extractUuid(raw: string): string | null {
   let s = String(raw ?? "");
   try {
@@ -146,9 +172,7 @@ export default async function TicketPage({
   return (
     <main style={{ padding: 24, fontFamily: "system-ui", maxWidth: 720, margin: "0 auto" }}>
       <h1 style={{ marginBottom: 6 }}>{t.event_name}</h1>
-      <div style={{ opacity: 0.8, marginBottom: 18 }}>
-        {t.ticket_type} · {t.price_isk} ISK
-      </div>
+      <div style={{ opacity: 0.8, marginBottom: 18 }}>{t.ticket_type}</div>
 
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16 }}>
@@ -174,7 +198,7 @@ export default async function TicketPage({
           )}
 
           <h3>Details</h3>
-          <div>Starts: {t.starts_at ? new Date(t.starts_at).toLocaleString() : "—"}</div>
+          <div>Starts: {formatStartsAt(t.starts_at)}</div>
           <div>Venue: {t.venue ?? "—"}</div>
 
           <div style={{ marginTop: 18, fontSize: 12, opacity: 0.7 }}>
