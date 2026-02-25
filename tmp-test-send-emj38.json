@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "ticketId": "c201e87c-77b8-4764-85ef-c442d303a07e",
+  "ticketUrl": "https://tickets-ten-gray.vercel.app/t/c201e87c-77b8-4764-85ef-c442d303a07e",
+  "issuedAt": "2026-02-25T21:47:51.879Z",
+  "subject": "Þinn miði á Árshátíð FV 28. feb kl:18:30",
+  "email": {
+    "ok": false,
+    "error": "You can only send testing emails to your own email address (brj46@hi.is). To send emails to other recipients, please verify a domain at resend.com/domains, and change the `from` address to an email using this domain."
+  }
+}

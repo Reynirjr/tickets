@@ -176,7 +176,7 @@ export async function POST(req: Request) {
     } else {
       try {
         const resend = new Resend(apiKey);
-        const from = process.env.RESEND_FROM ?? "Tickets <onboarding@resend.dev>";
+        const from = process.env.RESEND_FROM ?? "Tickets <nord@hi.is>";
         const replyTo = (process.env.RESEND_REPLY_TO ?? "").toString().trim();
         emailMeta = { from, replyTo: replyTo || null };
 
