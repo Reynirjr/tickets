@@ -2,6 +2,32 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Install
+
+```bash
+npm install
+```
+
+### Environment
+
+This app issues tickets and emails them via SMTP (Nodemailer). Configure these variables (for example in `.env`):
+
+```bash
+DATABASE_URL=...
+
+# Mailtrap Live SMTP example
+EMAIL_SERVER=live.smtp.mailtrap.io
+EMAIL_PORT=587
+EMAIL_USERNAME=api
+EMAIL_PASSWORD=...
+EMAIL_SENDER=mailtrap@nord.is
+
+# Optional
+EMAIL_REPLY_TO=...
+TICKETS_PUBLIC_BASE_URL=https://your-public-site.example
+ISSUE_API_KEY=...
+```
+
 First, run the development server:
 
 ```bash

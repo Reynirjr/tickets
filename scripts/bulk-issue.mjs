@@ -25,6 +25,42 @@ Notes:
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+function loadDotEnvIfPresent(envPath) {
+  if (!envPath) return;
+  if (!fs.existsSync(envPath)) return;
+  const raw = fs.readFileSync(envPath, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const m = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
+
+    const key = m[1];
+    let value = m[2] ?? "";
+    value = value.replace(/^['"]/, "").replace(/['"]$/, "");
+
+    if (process.env[key] == null || process.env[key] === "") {
+      process.env[key] = value;
+    }
+  }
+}
+
+function loadDefaultEnv() {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const candidates = [
+    path.resolve(process.cwd(), "apps", "tickets", ".env"),
+    path.resolve(__dirname, "..", "apps", "tickets", ".env"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      loadDotEnvIfPresent(p);
+      break;
+    }
+  }
+}
 
 function parseCsv(text) {
   const rows = [];
@@ -119,6 +155,10 @@ function normalizeTypeName(s) {
 }
 
 async function main() {
+  // Load apps/tickets/.env by default for local scripts.
+  // (Vercel env vars will be set in the deployment environment instead.)
+  loadDefaultEnv();
+
   const argv = process.argv.slice(2);
   let csvPath = "";
   let cliOnlyEmail = "";
@@ -165,8 +205,15 @@ async function main() {
   const issueApiKey = process.env.ISSUE_API_KEY || "";
   const onlyEmail = (cliOnlyEmail || process.env.ONLY_EMAIL || "").trim().toLowerCase();
   const dryRun = cliDryRun || String(process.env.DRY_RUN || "").trim() === "1";
+
   const vercelProtectionBypass = (
-    process.env.VERCEL_PROTECTION_BYPASS || process.env.VERCEL_AUTOMATION_BYPASS_SECRET || ""
+    process.env.VERCEL_PROTECTION_BYPASS ||
+    process.env.VERCEL_AUTOMATION_BYPASS_SECRET ||
+    // Common ad-hoc names people use in local .env files
+    process.env.PROTECTION_BYPASS ||
+    process.env.Protection_Bypass ||
+    process.env.PROTECTION_BYPASS_SECRET ||
+    ""
   ).trim();
 
   const protectionHeaders = {};

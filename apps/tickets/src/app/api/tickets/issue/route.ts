@@ -1,9 +1,61 @@
 import { NextResponse } from "next/server";
 import { Client } from "pg";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import QRCode from "qrcode";
 
 export const runtime = "nodejs";
+
+function parseEmailServer(value?: string | null): { host: string; port: number; secure: boolean } | null {
+  const raw = (value ?? "").toString().trim();
+  if (!raw) return null;
+
+  // Support:
+  // - "live.smtp.mailtrap.io" (defaults)
+  // - "live.smtp.mailtrap.io:587"
+  // - "smtp://user:pass@host:port" or "smtps://..."
+  if (/^smtps?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw);
+      const host = u.hostname;
+      const port = u.port ? Number(u.port) : u.protocol.toLowerCase() === "smtps:" ? 465 : 587;
+      const secure = u.protocol.toLowerCase() === "smtps:" || port === 465;
+      if (!host || !Number.isFinite(port)) return null;
+      return { host, port, secure };
+    } catch {
+      return null;
+    }
+  }
+
+  const m = raw.match(/^([^:]+)(?::(\d+))?$/);
+  if (!m) return null;
+  const host = m[1].trim();
+  const port = m[2] ? Number(m[2]) : Number(process.env.EMAIL_PORT ?? 587);
+  const secure = port === 465;
+  if (!host || !Number.isFinite(port)) return null;
+  return { host, port, secure };
+}
+
+function getSmtpTransport() {
+  const server = parseEmailServer(process.env.EMAIL_SERVER);
+  if (!server) {
+    return { ok: false as const, error: "EMAIL_SERVER missing or invalid" };
+  }
+
+  const user = (process.env.EMAIL_USERNAME ?? "").toString().trim();
+  const pass = (process.env.EMAIL_PASSWORD ?? "").toString();
+  if (!user || !pass) {
+    return { ok: false as const, error: "EMAIL_USERNAME/EMAIL_PASSWORD missing" };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: server.host,
+    port: server.port,
+    secure: server.secure,
+    auth: { user, pass },
+  });
+
+  return { ok: true as const, transporter };
+}
 
 function normalizeTicketTypeKey(value?: string | null): string {
   return String(value ?? "")
@@ -105,7 +157,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const { ticketTypeId, email, name } = await req.json().catch(() => ({}));
+  const { ticketTypeId, email, name, linkOnly } = await req.json().catch(() => ({}));
 
   if (!ticketTypeId || !email) {
     return NextResponse.json({ ok: false, error: "ticketTypeId and email are required" }, { status: 400 });
@@ -158,72 +210,79 @@ export async function POST(req: Request) {
     const publicBase = process.env.TICKETS_PUBLIC_BASE_URL ?? origin;
     const ticketUrl = `${publicBase}/t/${ticketId}`;
 
-    // QR should match what the door-scanner expects (ticket UUID).
-    // Note: many email clients block/strip `data:` image URLs. We host the QR and also attach it.
-    const qrPngBase64 = (await QRCode.toBuffer(ticketId, { type: "png", margin: 1, scale: 8 })).toString(
-      "base64"
-    );
+    const shouldAttachQr = !Boolean(linkOnly);
+    let qrPngBase64: string | null = null;
+    if (shouldAttachQr) {
+      // QR should match what the door-scanner expects (ticket UUID).
+      // Note: many email clients block/strip `data:` image URLs. We host the QR and also attach it.
+      qrPngBase64 = (await QRCode.toBuffer(ticketId, { type: "png", margin: 1, scale: 8 })).toString("base64");
+    }
 
-    const apiKey = process.env.RESEND_API_KEY;
     let emailResult:
       | { ok: true; id?: string }
       | { ok: false; error: string; skipped?: boolean }
       | undefined;
     let emailMeta: { from?: string; replyTo?: string | null } | undefined;
 
-    if (!apiKey) {
-      emailResult = { ok: false, error: "RESEND_API_KEY missing", skipped: true };
-    } else {
-      try {
-        const resend = new Resend(apiKey);
-        const from = process.env.RESEND_FROM ?? "Tickets <tickets@nord.is>";
-        const replyTo = (process.env.RESEND_REPLY_TO ?? "").toString().trim();
-        emailMeta = { from, replyTo: replyTo || null };
+    try {
+      const from = (process.env.EMAIL_SENDER ?? process.env.RESEND_FROM ?? "Tickets <tickets@nord.is>").toString();
+      const replyTo = (process.env.EMAIL_REPLY_TO ?? process.env.RESEND_REPLY_TO ?? "").toString().trim();
+      emailMeta = { from, replyTo: replyTo || null };
 
+      const mailer = getSmtpTransport();
+      if (!mailer.ok) {
+        emailResult = { ok: false, error: mailer.error, skipped: true };
+      } else {
         const safeName = (name ?? "").toString().trim();
         const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
 
-        const sent = await resend.emails.send({
+        const qrLineHtml = shouldAttachQr
+          ? `<p style="margin: 0 0 8px">QR kóðinn er í viðhengi. Sýndu hann við inngang.</p>`
+          : "";
+        const qrLineText = shouldAttachQr ? "\n\nQR kóðinn er í viðhengi. Sýndu hann við inngang." : "";
+
+        const html = `
+          <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
+            <h1 style="margin: 0 0 8px">${subjectLine}</h1>
+            <p style="margin: 0 0 12px">${greeting}.</p>
+
+            <p style="margin: 0 0 12px">Miði: <b>${ticketType}</b></p>
+
+            <p style="margin: 0 0 8px">Opna miða: <a href="${ticketUrl}">${ticketUrl}</a></p>
+
+            ${qrLineHtml}
+            <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
+          </div>
+        `;
+
+        const text = `${subjectLine}\n\n${greeting}.\n\nMiði: ${ticketType}\n\nOpna miða: ${ticketUrl}${qrLineText}\n\nMiða-ID: ${ticketId}`;
+
+        const info = await mailer.transporter.sendMail({
           from,
           to: email,
           ...(replyTo ? { replyTo } : {}),
           subject: subjectLine,
-          html: `
-            <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
-              <h1 style="margin: 0 0 8px">${subjectLine}</h1>
-              <p style="margin: 0 0 12px">${greeting}.</p>
-
-              <p style="margin: 0 0 12px">Miði: <b>${ticketType}</b></p>
-
-              <p style="margin: 0 0 8px">QR kóðinn er í viðhengi. Sýndu hann við inngang.</p>
-              <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
-            </div>
-          `,
-          attachments: [
-            {
-              filename: `ticket-${ticketId}.png`,
-              content: qrPngBase64,
-              contentType: "image/png",
-            },
-          ],
+          text,
+          html,
+          ...(shouldAttachQr && qrPngBase64
+            ? {
+                attachments: [
+                  {
+                    filename: `ticket-${ticketId}.png`,
+                    content: Buffer.from(qrPngBase64, "base64"),
+                    contentType: "image/png",
+                  },
+                ],
+              }
+            : {}),
         });
 
-        // resend@6 returns { data, error } and does not necessarily throw on API errors.
-        const maybeError = (sent as unknown as { error?: { message?: string } | string | null })?.error;
-        if (maybeError) {
-          const message =
-            typeof maybeError === "string" ? maybeError : maybeError?.message ? maybeError.message : String(maybeError);
-          emailResult = { ok: false, error: message };
-        } else {
-          const id =
-            (sent as unknown as { data?: { id?: string } | null })?.data?.id ??
-            (sent as unknown as { id?: string })?.id;
-          emailResult = { ok: true, id };
-        }
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        emailResult = { ok: false, error: message };
+        // Nodemailer returns a messageId; Mailtrap may also add extra metadata.
+        emailResult = { ok: true, id: info.messageId };
       }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      emailResult = { ok: false, error: message };
     }
 
     return NextResponse.json({

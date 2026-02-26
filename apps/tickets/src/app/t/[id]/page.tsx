@@ -168,6 +168,7 @@ export default async function TicketPage({
   const t = data.ticket;
   const publicBase = process.env.TICKETS_PUBLIC_BASE_URL ?? (await baseUrl());
   const ticketUrl = `${publicBase}/t/${id}`;
+  const venueDisplay = "FÍ Salurinn";
 
   const qr = await QRCode.toDataURL(id, { margin: 1, scale: 8 });
 
@@ -201,7 +202,7 @@ export default async function TicketPage({
 
           <h3>Details</h3>
           <div>Starts: {formatStartsAt(t.starts_at)}</div>
-          <div>Venue: {t.venue ?? "—"}</div>
+          <div>Venue: {venueDisplay}</div>
 
           <div style={{ marginTop: 18, fontSize: 12, opacity: 0.7 }}>
             Link: {ticketUrl}
