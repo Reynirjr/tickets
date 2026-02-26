@@ -213,11 +213,8 @@ async function main() {
 
     attempted++;
 
-    const text = `${subject}\n\n${url}`;
-    const html = `<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
-      <h1 style="margin:0 0 12px">${subject}</h1>
-      <p style="margin:0 0 8px"><a href="${url}">${url}</a></p>
-    </div>`;
+      // Strict link-only: plain text with only the URL.
+      const text = `${url}`;
 
     const startedAt = new Date().toISOString();
 
@@ -233,7 +230,6 @@ async function main() {
           ...(replyTo ? { replyTo } : {}),
           subject,
           text,
-          html,
         });
 
         appendJsonl(outPath, {

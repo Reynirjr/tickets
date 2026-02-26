@@ -252,19 +252,10 @@ export async function POST(req: Request) {
           emailResult = { ok: false, error: mailer.error, skipped: true };
         } else {
           const safeName = (name ?? "").toString().trim();
-          const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
-
-          const html = `
-            <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
-              <h1 style="margin: 0 0 8px">${subjectLine}</h1>
-              <p style="margin: 0 0 12px">${greeting}.</p>
-
-              <p style="margin: 0 0 8px">Opna miða: <a href="${ticketUrl}">${ticketUrl}</a></p>
-              <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
-            </div>
-          `;
-
-          const text = `${subjectLine}\n\n${greeting}.\n\nOpna miða: ${ticketUrl}\n\nMiða-ID: ${ticketId}`;
+          // Strict link-only email body: plain text with only the link.
+          // (No HTML, no extra metadata lines.)
+          void safeName;
+          const text = `${ticketUrl}`;
 
           const info = await mailer.transporter.sendMail({
             from,
@@ -272,7 +263,6 @@ export async function POST(req: Request) {
             ...(replyTo ? { replyTo } : {}),
             subject: subjectLine,
             text,
-            html,
             ...(shouldAttachQr && qrPngBase64
               ? {
                   attachments: [
