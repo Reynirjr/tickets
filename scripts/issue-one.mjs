@@ -72,6 +72,7 @@ async function main() {
     .replace(/\/$/, "");
   const attachQr = hasFlag("--attach-qr");
   const linkOnly = hasFlag("--link-only") ? true : attachQr ? false : true;
+  const skipEmail = hasFlag("--skip-email");
 
   if (!email) {
     console.error("Missing --email");
@@ -130,6 +131,7 @@ async function main() {
       email,
       ...(name ? { name } : {}),
       ...(linkOnly ? { linkOnly: true } : {}),
+      ...(skipEmail ? { skipEmail: true } : {}),
     }),
   });
 
@@ -139,7 +141,7 @@ async function main() {
     process.exit(1);
   }
 
-  if (json?.email && json.email.ok !== true) {
+  if (!skipEmail && json?.email && json.email.ok !== true) {
     console.error("Ticket created but email failed:", json.email);
     console.log(JSON.stringify({ ticketId: json.ticketId, ticketUrl: json.ticketUrl }, null, 2));
     process.exit(1);

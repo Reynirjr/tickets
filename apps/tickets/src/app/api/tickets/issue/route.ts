@@ -170,7 +170,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const { ticketTypeId, email, name, linkOnly } = await req.json().catch(() => ({}));
+  const { ticketTypeId, email, name, linkOnly, skipEmail } = await req.json().catch(() => ({}));
 
   if (!ticketTypeId || !email) {
     return NextResponse.json({ ok: false, error: "ticketTypeId and email are required" }, { status: 400 });
@@ -235,56 +235,62 @@ export async function POST(req: Request) {
       | undefined;
     let emailMeta: { from?: string; replyTo?: string | null } | undefined;
 
-    try {
-      const from = (process.env.EMAIL_SENDER ?? process.env.RESEND_FROM ?? "mailtrap@nord.is").toString();
-      const replyTo = (process.env.EMAIL_REPLY_TO ?? process.env.RESEND_REPLY_TO ?? "").toString().trim();
-      emailMeta = { from, replyTo: replyTo || null };
+    const skipEmailParsed = toBooleanOrUndefined(skipEmail) ?? false;
 
-      const mailer = getSmtpTransport();
-      if (!mailer.ok) {
-        emailResult = { ok: false, error: mailer.error, skipped: true };
-      } else {
-        const safeName = (name ?? "").toString().trim();
-        const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
+    if (skipEmailParsed) {
+      emailResult = { ok: false, error: "Skipped", skipped: true };
+    } else {
+      try {
+        const from = (process.env.EMAIL_SENDER ?? process.env.RESEND_FROM ?? "mailtrap@nord.is").toString();
+        const replyTo = (process.env.EMAIL_REPLY_TO ?? process.env.RESEND_REPLY_TO ?? "").toString().trim();
+        emailMeta = { from, replyTo: replyTo || null };
 
-        const html = `
-          <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
-            <h1 style="margin: 0 0 8px">${subjectLine}</h1>
-            <p style="margin: 0 0 12px">${greeting}.</p>
+        const mailer = getSmtpTransport();
+        if (!mailer.ok) {
+          emailResult = { ok: false, error: mailer.error, skipped: true };
+        } else {
+          const safeName = (name ?? "").toString().trim();
+          const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
 
-            <p style="margin: 0 0 8px">Opna miða: <a href="${ticketUrl}">${ticketUrl}</a></p>
-            <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
-          </div>
-        `;
+          const html = `
+            <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
+              <h1 style="margin: 0 0 8px">${subjectLine}</h1>
+              <p style="margin: 0 0 12px">${greeting}.</p>
 
-        const text = `${subjectLine}\n\n${greeting}.\n\nOpna miða: ${ticketUrl}\n\nMiða-ID: ${ticketId}`;
+              <p style="margin: 0 0 8px">Opna miða: <a href="${ticketUrl}">${ticketUrl}</a></p>
+              <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
+            </div>
+          `;
 
-        const info = await mailer.transporter.sendMail({
-          from,
-          to: email,
-          ...(replyTo ? { replyTo } : {}),
-          subject: subjectLine,
-          text,
-          html,
-          ...(shouldAttachQr && qrPngBase64
-            ? {
-                attachments: [
-                  {
-                    filename: `ticket-${ticketId}.png`,
-                    content: Buffer.from(qrPngBase64, "base64"),
-                    contentType: "image/png",
-                  },
-                ],
-              }
-            : {}),
-        });
+          const text = `${subjectLine}\n\n${greeting}.\n\nOpna miða: ${ticketUrl}\n\nMiða-ID: ${ticketId}`;
 
-        // Nodemailer returns a messageId; Mailtrap may also add extra metadata.
-        emailResult = { ok: true, id: info.messageId };
+          const info = await mailer.transporter.sendMail({
+            from,
+            to: email,
+            ...(replyTo ? { replyTo } : {}),
+            subject: subjectLine,
+            text,
+            html,
+            ...(shouldAttachQr && qrPngBase64
+              ? {
+                  attachments: [
+                    {
+                      filename: `ticket-${ticketId}.png`,
+                      content: Buffer.from(qrPngBase64, "base64"),
+                      contentType: "image/png",
+                    },
+                  ],
+                }
+              : {}),
+          });
+
+          // Nodemailer returns a messageId; Mailtrap may also add extra metadata.
+          emailResult = { ok: true, id: info.messageId };
+        }
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        emailResult = { ok: false, error: message };
       }
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      emailResult = { ok: false, error: message };
     }
 
     return NextResponse.json({
