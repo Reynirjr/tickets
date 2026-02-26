@@ -1,6 +1,5 @@
 import Image from "next/image";
 import QRCode from "qrcode";
-import { headers } from "next/headers";
 import { Client } from "pg";
 
 export const runtime = "nodejs";
@@ -21,7 +20,27 @@ type TicketApiResponse =
   | { ok: true; ticket: Ticket }
   | { ok: false; error: string };
 
-function formatStartsAt(value?: string | null): string {
+function normalizeTicketTypeKey(value?: string | null): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function isFoodAndBallTicketType(normalizedKey: string): boolean {
+  const hasBall = /\bball\b/.test(normalizedKey);
+  const hasFood = /\bmatur\b/.test(normalizedKey) || /\bmat\b/.test(normalizedKey);
+  return hasBall && hasFood;
+}
+
+function isJustBallTicketType(normalizedKey: string): boolean {
+  if (normalizedKey === "ball") return true;
+  return /\bbara\b/.test(normalizedKey) && /\bball\b/.test(normalizedKey);
+}
+
+function formatStartsAt(value?: string | null, ticketType?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
@@ -43,10 +62,16 @@ function formatStartsAt(value?: string | null): string {
   const hour = get("hour");
   const minute = get("minute");
 
-  if (!day || !month || !year || !hour || !minute) return "—";
+  if (!day || !month || !year) return "—";
+
+  const key = normalizeTicketTypeKey(ticketType);
+  const hh = isFoodAndBallTicketType(key) ? "18" : isJustBallTicketType(key) ? "21" : hour;
+  const mm = isFoodAndBallTicketType(key) || isJustBallTicketType(key) ? "30" : minute;
+  if (!hh || !mm) return "—";
+
   const d1 = String(Number(day));
   const m1 = String(Number(month));
-  return `${hour}:${minute} ${d1}/${m1}/${year}`;
+  return `${hh}:${mm} ${d1}/${m1}/${year}`;
 }
 
 function extractUuid(raw: string): string | null {
@@ -76,18 +101,6 @@ function extractUuid(raw: string): string | null {
     /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i
   );
   return m ? m[0].toLowerCase() : null;
-}
-
-async function baseUrl() {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? (process.env.NODE_ENV === "development" ? "http" : "https");
-
-  if (!host) {
-    throw new Error("Missing host header");
-  }
-
-  return `${proto}://${host}`;
 }
 
 async function getTicket(id: string): Promise<TicketApiResponse> {
@@ -166,8 +179,6 @@ export default async function TicketPage({
   }
 
   const t = data.ticket;
-  const publicBase = process.env.TICKETS_PUBLIC_BASE_URL ?? (await baseUrl());
-  const ticketUrl = `${publicBase}/t/${id}`;
   const venueDisplay = "FÍ Salurinn";
 
   const qr = await QRCode.toDataURL(id, { margin: 1, scale: 8 });
@@ -201,12 +212,8 @@ export default async function TicketPage({
           )}
 
           <h3>Details</h3>
-          <div>Starts: {formatStartsAt(t.starts_at)}</div>
+          <div>Starts: {formatStartsAt(t.starts_at, t.ticket_type)}</div>
           <div>Venue: {venueDisplay}</div>
-
-          <div style={{ marginTop: 18, fontSize: 12, opacity: 0.7 }}>
-            Link: {ticketUrl}
-          </div>
         </div>
       </div>
     </main>

@@ -146,6 +146,19 @@ function formatSubjectStart(ticketType: string, startsAt: string | null): string
   return `${date.day}. ${date.month} kl:${time}`;
 }
 
+function toBooleanOrUndefined(value: unknown): boolean | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (!s) return undefined;
+    if (["1", "true", "yes", "y", "on"].includes(s)) return true;
+    if (["0", "false", "no", "n", "off"].includes(s)) return false;
+  }
+  return undefined;
+}
+
 export async function POST(req: Request) {
   const requiredKey = process.env.ISSUE_API_KEY;
   if (requiredKey) {
@@ -192,11 +205,7 @@ export async function POST(req: Request) {
     }
 
     const ticketType = ttRes.rows[0].ticket_type as string;
-    const eventName = ttRes.rows[0].event_name as string;
-    const startsAt = (ttRes.rows[0].starts_at as string | null | undefined) ?? null;
-    const subjectEventName = /\bFV\b/i.test(eventName) ? eventName : `${eventName} FV`;
-    const subjectStart = formatSubjectStart(ticketType, startsAt);
-    const subjectLine = `Þinn miði á ${subjectEventName}${subjectStart ? ` ${subjectStart}` : ""}`;
+    const subjectLine = "Þinn miði á Árshátíð FV!";
 
     const res = await client.query(
       `insert into tickets (ticket_type_id, email, name)
@@ -210,7 +219,9 @@ export async function POST(req: Request) {
     const publicBase = process.env.TICKETS_PUBLIC_BASE_URL ?? origin;
     const ticketUrl = `${publicBase}/t/${ticketId}`;
 
-    const shouldAttachQr = !Boolean(linkOnly);
+    const linkOnlyParsed = toBooleanOrUndefined(linkOnly);
+    const isLinkOnly = linkOnlyParsed ?? true;
+    const shouldAttachQr = !isLinkOnly;
     let qrPngBase64: string | null = null;
     if (shouldAttachQr) {
       // QR should match what the door-scanner expects (ticket UUID).
@@ -225,7 +236,7 @@ export async function POST(req: Request) {
     let emailMeta: { from?: string; replyTo?: string | null } | undefined;
 
     try {
-      const from = (process.env.EMAIL_SENDER ?? process.env.RESEND_FROM ?? "Tickets <tickets@nord.is>").toString();
+      const from = (process.env.EMAIL_SENDER ?? process.env.RESEND_FROM ?? "mailtrap@nord.is").toString();
       const replyTo = (process.env.EMAIL_REPLY_TO ?? process.env.RESEND_REPLY_TO ?? "").toString().trim();
       emailMeta = { from, replyTo: replyTo || null };
 
@@ -236,26 +247,17 @@ export async function POST(req: Request) {
         const safeName = (name ?? "").toString().trim();
         const greeting = safeName ? `Hæ ${safeName}` : "Hæ";
 
-        const qrLineHtml = shouldAttachQr
-          ? `<p style="margin: 0 0 8px">QR kóðinn er í viðhengi. Sýndu hann við inngang.</p>`
-          : "";
-        const qrLineText = shouldAttachQr ? "\n\nQR kóðinn er í viðhengi. Sýndu hann við inngang." : "";
-
         const html = `
           <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4">
             <h1 style="margin: 0 0 8px">${subjectLine}</h1>
             <p style="margin: 0 0 12px">${greeting}.</p>
 
-            <p style="margin: 0 0 12px">Miði: <b>${ticketType}</b></p>
-
             <p style="margin: 0 0 8px">Opna miða: <a href="${ticketUrl}">${ticketUrl}</a></p>
-
-            ${qrLineHtml}
             <p style="margin: 14px 0 0; font-size: 12px; color: #666">Miða-ID: ${ticketId}</p>
           </div>
         `;
 
-        const text = `${subjectLine}\n\n${greeting}.\n\nMiði: ${ticketType}\n\nOpna miða: ${ticketUrl}${qrLineText}\n\nMiða-ID: ${ticketId}`;
+        const text = `${subjectLine}\n\n${greeting}.\n\nOpna miða: ${ticketUrl}\n\nMiða-ID: ${ticketId}`;
 
         const info = await mailer.transporter.sendMail({
           from,
