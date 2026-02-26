@@ -65,8 +65,10 @@ function formatStartsAt(value?: string | null, ticketType?: string | null): stri
   if (!day || !month || !year) return "—";
 
   const key = normalizeTicketTypeKey(ticketType);
-  const hh = isFoodAndBallTicketType(key) ? "18" : isJustBallTicketType(key) ? "21" : hour;
-  const mm = isFoodAndBallTicketType(key) || isJustBallTicketType(key) ? "30" : minute;
+  const isFoodAndBall = isFoodAndBallTicketType(key);
+  const isJustBall = isJustBallTicketType(key);
+  const hh = isFoodAndBall ? "18" : isJustBall ? "21" : hour;
+  const mm = isFoodAndBall ? "30" : isJustBall ? "00" : minute;
   if (!hh || !mm) return "—";
 
   const d1 = String(Number(day));
