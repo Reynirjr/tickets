@@ -70,7 +70,8 @@ async function main() {
   const baseUrl = (arg("--base-url") || process.env.TICKETS_BASE_URL || "https://tickets-ten-gray.vercel.app")
     .trim()
     .replace(/\/$/, "");
-  const linkOnly = hasFlag("--link-only");
+  const attachQr = hasFlag("--attach-qr");
+  const linkOnly = hasFlag("--link-only") ? true : attachQr ? false : true;
 
   if (!email) {
     console.error("Missing --email");
@@ -124,7 +125,12 @@ async function main() {
   const res = await fetch(`${baseUrl}/api/tickets/issue`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ ticketTypeId: row.id, email, ...(name ? { name } : {}), ...(linkOnly ? { linkOnly: true } : {}) }),
+    body: JSON.stringify({
+      ticketTypeId: row.id,
+      email,
+      ...(name ? { name } : {}),
+      ...(linkOnly ? { linkOnly: true } : {}),
+    }),
   });
 
   const json = await res.json().catch(() => ({}));
