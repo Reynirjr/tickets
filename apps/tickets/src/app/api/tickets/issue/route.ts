@@ -241,8 +241,10 @@ export async function POST(req: Request) {
       emailResult = { ok: false, error: "Skipped", skipped: true };
     } else {
       try {
-        const from = (process.env.EMAIL_SENDER ?? process.env.RESEND_FROM ?? "mailtrap@nord.is").toString();
-        const replyTo = (process.env.EMAIL_REPLY_TO ?? process.env.RESEND_REPLY_TO ?? "").toString().trim();
+        // IMPORTANT: do not fall back to legacy RESEND_* env vars here.
+        // Those may still be set in Vercel and can cause deliverability issues.
+        const from = (process.env.EMAIL_SENDER ?? "mailtrap@nord.is").toString();
+        const replyTo = (process.env.EMAIL_REPLY_TO ?? "").toString().trim();
         emailMeta = { from, replyTo: replyTo || null };
 
         const mailer = getSmtpTransport();
