@@ -213,8 +213,8 @@ async function main() {
 
     attempted++;
 
-      // Strict link-only: plain text with only the URL.
-      const text = `${url}`;
+      // Desired format: intro line + blank line + link.
+      const text = `${subject}\n\n${url}`;
 
     const startedAt = new Date().toISOString();
 

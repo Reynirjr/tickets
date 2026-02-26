@@ -252,10 +252,10 @@ export async function POST(req: Request) {
           emailResult = { ok: false, error: mailer.error, skipped: true };
         } else {
           const safeName = (name ?? "").toString().trim();
-          // Strict link-only email body: plain text with only the link.
+          // Desired format: intro line + blank line + link.
           // (No HTML, no extra metadata lines.)
           void safeName;
-          const text = `${ticketUrl}`;
+          const text = `${subjectLine}\n\n${ticketUrl}`;
 
           const info = await mailer.transporter.sendMail({
             from,

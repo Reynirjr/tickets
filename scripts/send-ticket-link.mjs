@@ -130,8 +130,8 @@ async function main() {
     auth: { user, pass },
   });
 
-  // Strict link-only: plain text with only the URL.
-  const text = `${url}`;
+  // Desired format: intro line + blank line + link.
+  const text = `${subject}\n\n${url}`;
 
   const info = await transporter.sendMail({
     from,
